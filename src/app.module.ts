@@ -12,10 +12,10 @@ import { QueueModule } from './queue/queue.module.js';
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     QueueModule,
+    ExportModule,
     LeadsModule,
     EnrichmentModule,
     ClassificationModule,
-    ExportModule,
   ],
 })
 export class AppModule {}

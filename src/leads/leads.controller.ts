@@ -13,10 +13,15 @@ import { LeadsService } from './leads.service.js';
 import { CreateLeadDto } from './dto/create-lead.dto.js';
 import { UpdateLeadDto } from './dto/update-lead.dto.js';
 import { LeadQueryDto } from './dto/lead-query.dto.js';
+import { ExportService } from '../export/export.service.js';
+import { ExportQueryDto } from '../export/export.controller.js';
 
 @Controller('leads')
 export class LeadsController {
-  constructor(private readonly leadsService: LeadsService) {}
+  constructor(
+    private readonly leadsService: LeadsService,
+    private readonly exportService: ExportService,
+  ) {}
 
   @Post()
   create(@Body() dto: CreateLeadDto) {
@@ -26,6 +31,11 @@ export class LeadsController {
   @Get()
   findAll(@Query() query: LeadQueryDto) {
     return this.leadsService.findAll(query);
+  }
+
+  @Get('export')
+  exportLeads(@Query() query: ExportQueryDto) {
+    return this.exportService.exportLeads(query);
   }
 
   @Get(':id')
