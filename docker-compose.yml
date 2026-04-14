@@ -7,8 +7,6 @@ services:
       POSTGRES_DB: leads_db
     ports:
       - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U leads -d leads_db"]
       interval: 5s
@@ -75,6 +73,29 @@ services:
     environment:
       PORT: "3001"
       FAILURE_RATE: "0.1"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://leads:leads123@postgres:5432/leads_db"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672"
+      OLLAMA_URL: "http://ollama:11434"
+      MOCK_API_URL: "http://mock-api:3001"
+      OLLAMA_MODEL: "tinyllama"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+      mock-api:
+        condition: service_started
+    restart: on-failure
 
 volumes:
   postgres_data:
