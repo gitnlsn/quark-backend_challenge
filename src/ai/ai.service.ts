@@ -101,20 +101,34 @@ Respond in exactly this JSON format, with no additional text:
     const prompt = this.buildPrompt(lead, enrichment);
     this.logger.log(`Classifying lead ${lead.id} with model ${this.model}`);
 
-    const response = await axios.post(
-      `${this.ollamaUrl}/api/generate`,
-      {
-        model: this.model,
-        prompt,
-        stream: false,
-        format: 'json',
-      },
-      { timeout: 120000 },
-    );
+    const maxAttempts = 3;
+    let lastError: Error | undefined;
 
-    const result = this.parseResponse(
-      (response.data as { response: string }).response,
-    );
-    return { ...result, modelUsed: `${this.model}:latest` };
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const response = await axios.post(
+        `${this.ollamaUrl}/api/generate`,
+        {
+          model: this.model,
+          prompt,
+          stream: false,
+          format: 'json',
+        },
+        { timeout: 120000 },
+      );
+
+      try {
+        const result = this.parseResponse(
+          (response.data as { response: string }).response,
+        );
+        return { ...result, modelUsed: `${this.model}:latest` };
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        this.logger.warn(
+          `Attempt ${attempt}/${maxAttempts} failed to parse response: ${lastError.message}`,
+        );
+      }
+    }
+
+    throw lastError;
   }
 }
