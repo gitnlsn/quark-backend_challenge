@@ -52,12 +52,18 @@ export function uniqueLead(overrides: Record<string, unknown> = {}) {
   const id = randomUUID().slice(0, 8);
   const cnpj = VALID_CNPJS[cnpjCounter++ % VALID_CNPJS.length];
   // Append random digits to make CNPJ unique per call (DB stores as varchar)
-  const uniqueCnpj = `${cnpj.slice(0, 8)}${id.replace(/[^0-9]/g, '').padEnd(6, '0').slice(0, 6)}`;
+  const uniqueCnpj = `${cnpj.slice(0, 8)}${id
+    .replace(/[^0-9]/g, '')
+    .padEnd(6, '0')
+    .slice(0, 6)}`;
 
   return {
     fullName: `Test User ${id}`,
     email: `test-${id}@example.com`,
-    phone: `+5511999${id.replace(/[^0-9]/g, '').padEnd(6, '0').slice(0, 6)}`,
+    phone: `+5511999${id
+      .replace(/[^0-9]/g, '')
+      .padEnd(6, '0')
+      .slice(0, 6)}`,
     companyName: `Company ${id}`,
     companyCnpj: uniqueCnpj,
     source: 'WEBSITE' as const,

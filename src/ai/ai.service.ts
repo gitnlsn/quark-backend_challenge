@@ -72,14 +72,17 @@ Respond in exactly this JSON format, with no additional text:
 
     const validClassifications = ['Hot', 'Warm', 'Cold'];
     const raw = String(parsed.classification);
-    const classification = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+    const classification =
+      raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
     if (!validClassifications.includes(classification)) {
       throw new Error(`Invalid classification: ${classification}`);
     }
 
     const validPotentials = ['High', 'Medium', 'Low'];
     const rawPotential = String(parsed.commercialPotential);
-    const commercialPotential = rawPotential.charAt(0).toUpperCase() + rawPotential.slice(1).toLowerCase();
+    const commercialPotential =
+      rawPotential.charAt(0).toUpperCase() +
+      rawPotential.slice(1).toLowerCase();
     if (!validPotentials.includes(commercialPotential)) {
       throw new Error(`Invalid commercialPotential: ${commercialPotential}`);
     }
@@ -129,6 +132,6 @@ Respond in exactly this JSON format, with no additional text:
       }
     }
 
-    throw lastError;
+    throw lastError!;
   }
 }

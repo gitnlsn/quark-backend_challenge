@@ -21,10 +21,7 @@ describe('LeadsService Integration (PostgreSQL)', () => {
     prisma = await createTestPrisma();
 
     const moduleRef = await Test.createTestingModule({
-      providers: [
-        LeadsService,
-        { provide: PrismaService, useValue: prisma },
-      ],
+      providers: [LeadsService, { provide: PrismaService, useValue: prisma }],
     }).compile();
 
     leadsService = moduleRef.get(LeadsService);
@@ -85,12 +82,20 @@ describe('LeadsService Integration (PostgreSQL)', () => {
       createdIds.push(lead.id);
     }
 
-    const page1 = await leadsService.findAll({ ids: createdIds, page: 1, limit: 2 });
+    const page1 = await leadsService.findAll({
+      ids: createdIds,
+      page: 1,
+      limit: 2,
+    });
     expect(page1.data).toHaveLength(2);
     expect(page1.meta.total).toBe(5);
     expect(page1.meta.totalPages).toBe(3);
 
-    const page3 = await leadsService.findAll({ ids: createdIds, page: 3, limit: 2 });
+    const page3 = await leadsService.findAll({
+      ids: createdIds,
+      page: 3,
+      limit: 2,
+    });
     expect(page3.data).toHaveLength(1);
   });
 
@@ -126,8 +131,12 @@ describe('LeadsService Integration (PostgreSQL)', () => {
   it('should search by fullName (case-insensitive)', async () => {
     if (!dbAvailable) return;
 
-    const lead1 = await leadsService.create(uniqueLead({ fullName: 'Alice Wonderland' }));
-    const lead2 = await leadsService.create(uniqueLead({ fullName: 'Bob Builder' }));
+    const lead1 = await leadsService.create(
+      uniqueLead({ fullName: 'Alice Wonderland' }),
+    );
+    const lead2 = await leadsService.create(
+      uniqueLead({ fullName: 'Bob Builder' }),
+    );
     const ids = [lead1.id, lead2.id];
 
     const result = await leadsService.findAll({ ids, search: 'alice' });

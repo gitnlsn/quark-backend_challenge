@@ -30,6 +30,11 @@ export class ClassificationService {
 
     const requestedAt = new Date().toISOString();
 
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data: { status: 'CLASSIFYING' },
+    });
+
     await this.queue.publish(CLASSIFICATION_QUEUE, { leadId, requestedAt });
     this.logger.log(`Classification requested for lead ${leadId}`);
 

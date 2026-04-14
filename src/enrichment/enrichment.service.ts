@@ -30,6 +30,11 @@ export class EnrichmentService {
 
     const requestedAt = new Date().toISOString();
 
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data: { status: 'ENRICHING' },
+    });
+
     await this.queue.publish(ENRICHMENT_QUEUE, { leadId, requestedAt });
     this.logger.log(`Enrichment requested for lead ${leadId}`);
 

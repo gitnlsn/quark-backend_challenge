@@ -70,11 +70,11 @@ describe('QueueService Integration (RabbitMQ)', () => {
         timeoutMs,
       );
 
-      rawCh.consume(queue, (msg) => {
+      void rawCh.consume(queue, (msg) => {
         if (!msg) return;
         clearTimeout(timer);
         rawCh.ack(msg);
-        rawCh.cancel(msg.fields.consumerTag).then(() => resolve(msg));
+        void rawCh.cancel(msg.fields.consumerTag).then(() => resolve(msg));
       });
     });
   }
@@ -107,7 +107,10 @@ describe('QueueService Integration (RabbitMQ)', () => {
     await queueService.publish(ENRICHMENT_QUEUE, payload);
 
     const msg = await consumePromise;
-    const body = JSON.parse(msg.content.toString());
+    const body = JSON.parse(msg.content.toString()) as {
+      leadId: string;
+      requestedAt: string;
+    };
 
     expect(body).toMatchObject({
       leadId: 'test-enrich',
@@ -127,7 +130,10 @@ describe('QueueService Integration (RabbitMQ)', () => {
     await queueService.publish(CLASSIFICATION_QUEUE, payload);
 
     const msg = await consumePromise;
-    const body = JSON.parse(msg.content.toString());
+    const body = JSON.parse(msg.content.toString()) as {
+      leadId: string;
+      requestedAt: string;
+    };
 
     expect(body).toMatchObject({
       leadId: 'test-classify',
@@ -169,13 +175,14 @@ describe('QueueService Integration (RabbitMQ)', () => {
       );
       const ids: string[] = [];
 
-      rawCh.consume(ENRICHMENT_QUEUE, (msg) => {
+      void rawCh.consume(ENRICHMENT_QUEUE, (msg) => {
         if (!msg) return;
         rawCh.ack(msg);
-        ids.push(JSON.parse(msg.content.toString()).leadId);
+        const parsed = JSON.parse(msg.content.toString()) as { leadId: string };
+        ids.push(parsed.leadId);
         if (ids.length === 3) {
           clearTimeout(timer);
-          rawCh.cancel(msg.fields.consumerTag).then(() => resolve(ids));
+          void rawCh.cancel(msg.fields.consumerTag).then(() => resolve(ids));
         }
       });
     });

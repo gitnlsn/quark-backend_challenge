@@ -20,10 +20,7 @@ describe('ExportService Integration (PostgreSQL)', () => {
     prisma = await createTestPrisma();
 
     const moduleRef = await Test.createTestingModule({
-      providers: [
-        ExportService,
-        { provide: PrismaService, useValue: prisma },
-      ],
+      providers: [ExportService, { provide: PrismaService, useValue: prisma }],
     }).compile();
 
     exportService = moduleRef.get(ExportService);

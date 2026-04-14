@@ -60,7 +60,9 @@ describe('EnrichmentService Integration (PostgreSQL)', () => {
     if (!dbAvailable) return;
 
     await expect(
-      enrichmentService.requestEnrichment('00000000-0000-0000-0000-000000000000'),
+      enrichmentService.requestEnrichment(
+        '00000000-0000-0000-0000-000000000000',
+      ),
     ).rejects.toThrow(NotFoundException);
   });
 
@@ -71,9 +73,9 @@ describe('EnrichmentService Integration (PostgreSQL)', () => {
       data: uniqueLead({ status: 'ENRICHING' }),
     });
 
-    await expect(
-      enrichmentService.requestEnrichment(lead.id),
-    ).rejects.toThrow(BadRequestException);
+    await expect(enrichmentService.requestEnrichment(lead.id)).rejects.toThrow(
+      BadRequestException,
+    );
   });
 
   it('should allow re-enrichment for ENRICHED leads', async () => {
@@ -134,7 +136,9 @@ describe('EnrichmentService Integration (PostgreSQL)', () => {
     if (!dbAvailable) return;
 
     await expect(
-      enrichmentService.getEnrichmentHistory('00000000-0000-0000-0000-000000000000'),
+      enrichmentService.getEnrichmentHistory(
+        '00000000-0000-0000-0000-000000000000',
+      ),
     ).rejects.toThrow(NotFoundException);
   });
 });
