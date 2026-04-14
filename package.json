@@ -18,7 +18,8 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "pretest:e2e": "DATABASE_URL='postgresql://leads:leads123@localhost:5433/leads_db' npx prisma db push --skip-generate --accept-data-loss",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts"
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:flow": "ts-node scripts/test-flows.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

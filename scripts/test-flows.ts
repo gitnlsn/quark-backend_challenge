@@ -146,16 +146,38 @@ async function poll(
   return false;
 }
 
+// ── CNPJ generator ───────────────────────────────────────────────────────────
+
+function generateValidCnpj(): string {
+  const FIRST_W = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const SECOND_W = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const digit = (d: number[], w: number[]) => {
+    const r = w.reduce((a, v, i) => a + v * d[i], 0) % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  // Random 8-digit base + 0001 branch
+  const base = Array.from({ length: 8 }, () => Math.floor(Math.random() * 10));
+  // Avoid all-same-digit
+  if (base.every((d) => d === base[0])) base[7] = (base[0] + 1) % 10;
+  const digits = [...base, 0, 0, 0, 1];
+  digits.push(digit(digits, FIRST_W));
+  digits.push(digit(digits.slice(0, 13), SECOND_W));
+  return digits.join('');
+}
+
 // ── Valid test data ──────────────────────────────────────────────────────────
 
 const ts = Date.now();
+const cnpj1 = generateValidCnpj();
+const cnpj2 = generateValidCnpj();
+const cnpj3 = generateValidCnpj();
 
 const LEAD_1 = {
   fullName: 'Roberto Mendes',
   email: `roberto.mendes+${ ts }@testflow.com`,
   phone: '+5511999990001',
   companyName: 'FlowTest Tecnologia',
-  companyCnpj: '71634825000106',
+  companyCnpj: cnpj1,
   companyWebsite: 'https://flowtest.com.br',
   estimatedValue: 320000.5,
   source: 'WEBSITE',
@@ -167,7 +189,7 @@ const LEAD_2 = {
   email: `camila.duarte+${ ts }@testflow.com`,
   phone: '+5521988881234',
   companyName: 'Duarte Consulting',
-  companyCnpj: '83920147000127',
+  companyCnpj: cnpj2,
   companyWebsite: 'https://duarteconsulting.com.br',
   estimatedValue: 150000,
   source: 'REFERRAL',
@@ -240,7 +262,7 @@ async function run() {
   // 1c. Duplicate email → 409
   log('1c', 'Duplicate email should fail');
   await expectStatus(
-    () => api.post('/leads', { ...LEAD_1, companyCnpj: '55443322000105' }),
+    () => api.post('/leads', { ...LEAD_1, companyCnpj: cnpj3 }),
     409,
     'POST /leads (duplicate email)',
   );
