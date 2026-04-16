@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { ConflictException } from '@nestjs/common';
 import { LeadStatus } from '@prisma/client';
 import {
   isValidTransition,
   canEnrich,
   canClassify,
+  transitionStatus,
 } from './state-machine.util.js';
 
 describe('isValidTransition', () => {
@@ -91,5 +93,78 @@ describe('canClassify', () => {
 
   it('should return false for ENRICHING', () => {
     expect(canClassify(LeadStatus.ENRICHING)).toBe(false);
+  });
+});
+
+describe('transitionStatus', () => {
+  type MockClient = {
+    lead: { updateMany: ReturnType<typeof vi.fn> };
+  };
+
+  function mockClient(count: number): MockClient {
+    return {
+      lead: { updateMany: vi.fn().mockResolvedValue({ count }) },
+    };
+  }
+
+  it('updates using the allowed source states for ENRICHING', async () => {
+    const client = mockClient(1);
+    await transitionStatus(
+      client as unknown as Parameters<typeof transitionStatus>[0],
+      'lead-1',
+      LeadStatus.ENRICHING,
+    );
+
+    expect(client.lead.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'lead-1',
+        status: {
+          in: [
+            LeadStatus.PENDING,
+            LeadStatus.ENRICHED,
+            LeadStatus.CLASSIFIED,
+            LeadStatus.FAILED,
+          ],
+        },
+      },
+      data: { status: LeadStatus.ENRICHING },
+    });
+  });
+
+  it('updates using the allowed source states for ENRICHED', async () => {
+    const client = mockClient(1);
+    await transitionStatus(
+      client as unknown as Parameters<typeof transitionStatus>[0],
+      'lead-1',
+      LeadStatus.ENRICHED,
+    );
+
+    expect(client.lead.updateMany).toHaveBeenCalledWith({
+      where: { id: 'lead-1', status: { in: [LeadStatus.ENRICHING] } },
+      data: { status: LeadStatus.ENRICHED },
+    });
+  });
+
+  it('throws ConflictException when no rows are updated', async () => {
+    const client = mockClient(0);
+    await expect(
+      transitionStatus(
+        client as unknown as Parameters<typeof transitionStatus>[0],
+        'lead-1',
+        LeadStatus.CLASSIFIED,
+      ),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('throws ConflictException when target has no valid source (PENDING)', async () => {
+    const client = mockClient(0);
+    await expect(
+      transitionStatus(
+        client as unknown as Parameters<typeof transitionStatus>[0],
+        'lead-1',
+        LeadStatus.PENDING,
+      ),
+    ).rejects.toThrow(ConflictException);
+    expect(client.lead.updateMany).not.toHaveBeenCalled();
   });
 });

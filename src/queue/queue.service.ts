@@ -2,7 +2,13 @@ import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqp-connection-manager';
 import { ChannelWrapper } from 'amqp-connection-manager';
-import { ENRICHMENT_QUEUE, CLASSIFICATION_QUEUE } from './queue.constants.js';
+import {
+  ENRICHMENT_QUEUE,
+  CLASSIFICATION_QUEUE,
+  DEAD_LETTER_EXCHANGE,
+  ENRICHMENT_DLQ,
+  CLASSIFICATION_DLQ,
+} from './queue.constants.js';
 
 @Injectable()
 export class QueueService implements OnModuleInit {
@@ -17,6 +23,10 @@ export class QueueService implements OnModuleInit {
       'RABBITMQ_URL',
       'amqp://guest:guest@localhost:5672',
     );
+    const prefetch = parseInt(
+      this.config.get<string>('RABBITMQ_PREFETCH', '5'),
+      10,
+    );
     this.connection = amqp.connect([url]);
 
     this.connection.on('connect', () =>
@@ -28,8 +38,40 @@ export class QueueService implements OnModuleInit {
 
     this.channel = this.connection.createChannel({
       setup: async (ch: amqp.Channel) => {
-        await ch.assertQueue(ENRICHMENT_QUEUE, { durable: true });
-        await ch.assertQueue(CLASSIFICATION_QUEUE, { durable: true });
+        await ch.prefetch(prefetch);
+
+        await ch.assertExchange(DEAD_LETTER_EXCHANGE, 'direct', {
+          durable: true,
+        });
+
+        await ch.assertQueue(ENRICHMENT_DLQ, { durable: true });
+        await ch.bindQueue(
+          ENRICHMENT_DLQ,
+          DEAD_LETTER_EXCHANGE,
+          ENRICHMENT_QUEUE,
+        );
+
+        await ch.assertQueue(CLASSIFICATION_DLQ, { durable: true });
+        await ch.bindQueue(
+          CLASSIFICATION_DLQ,
+          DEAD_LETTER_EXCHANGE,
+          CLASSIFICATION_QUEUE,
+        );
+
+        await ch.assertQueue(ENRICHMENT_QUEUE, {
+          durable: true,
+          arguments: {
+            'x-dead-letter-exchange': DEAD_LETTER_EXCHANGE,
+            'x-dead-letter-routing-key': ENRICHMENT_QUEUE,
+          },
+        });
+        await ch.assertQueue(CLASSIFICATION_QUEUE, {
+          durable: true,
+          arguments: {
+            'x-dead-letter-exchange': DEAD_LETTER_EXCHANGE,
+            'x-dead-letter-routing-key': CLASSIFICATION_QUEUE,
+          },
+        });
       },
     });
   }

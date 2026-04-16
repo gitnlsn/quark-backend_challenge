@@ -241,3 +241,15 @@ Implementacao propria do algoritmo de verificacao de digitos do CNPJ (pesos [5,4
 ### Campos imutaveis (email, companyCnpj)
 
 O `UpdateLeadDto` usa `OmitType` para remover email e companyCnpj, e `forbidNonWhitelisted: true` no ValidationPipe rejeita com 400 caso o client envie esses campos.
+
+### Estrategia de DLQ (Dead Letter Queue)
+
+Falhas de negocio (Mock API ou Ollama retornam erro) geram um registro FAILED no historico e ACK da mensagem — o erro ja esta capturado e auditavel via `GET /leads/:id/enrichments` ou `/classifications`, conforme requisito 6.5. Falhas infra-estruturais (DB indisponivel, mensagem malformada, lead removido concorrentemente) fazem `channel.nack(msg, false, false)`, e a mensagem e roteada para `lead.enrichment.dlq` ou `lead.classification.dlq` atraves do exchange `lead.dlx`. Reprocessamento continua sendo uma acao explicita do cliente (novo POST), conforme a seta pontilhada no diagrama da spec. Observacao operacional: apos upgrade da versao sem DLX, as filas antigas precisam ser deletadas para reassercao com os novos argumentos.
+
+### Enforcement da maquina de estados
+
+As transicoes de status do lead sao atomicas via `UPDATE ... WHERE id = $id AND status IN ($allowed_sources)` (helper `transitionStatus` em `src/common/utils/state-machine.util.ts`). Escolhi essa abordagem ao inves de `SELECT FOR UPDATE` + update para evitar manter lock durante o enqueue da mensagem. Se dois POSTs concorrentes tentarem transicionar o mesmo lead, apenas um vence o `updateMany` (count=1), e o outro recebe `ConflictException` (HTTP 409).
+
+### Prefetch do RabbitMQ
+
+Cada worker compartilha o mesmo canal com `prefetch` configuravel via `RABBITMQ_PREFETCH` (default 5), limitando mensagens em voo simultaneo e evitando que um burst de requests consuma memoria alem do necessario.

@@ -4,10 +4,14 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { LeadStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { QueueService } from '../queue/queue.service.js';
 import { CLASSIFICATION_QUEUE } from '../queue/queue.constants.js';
-import { canClassify } from '../common/utils/state-machine.util.js';
+import {
+  canClassify,
+  transitionStatus,
+} from '../common/utils/state-machine.util.js';
 
 @Injectable()
 export class ClassificationService {
@@ -30,10 +34,7 @@ export class ClassificationService {
 
     const requestedAt = new Date().toISOString();
 
-    await this.prisma.lead.update({
-      where: { id: leadId },
-      data: { status: 'CLASSIFYING' },
-    });
+    await transitionStatus(this.prisma, leadId, LeadStatus.CLASSIFYING);
 
     await this.queue.publish(CLASSIFICATION_QUEUE, { leadId, requestedAt });
     this.logger.log(`Classification requested for lead ${leadId}`);

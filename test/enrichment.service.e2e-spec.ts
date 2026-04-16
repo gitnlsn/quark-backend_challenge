@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { EnrichmentService } from '../src/enrichment/enrichment.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { QueueService } from '../src/queue/queue.service.js';
@@ -76,6 +80,35 @@ describe('EnrichmentService Integration (PostgreSQL)', () => {
     await expect(enrichmentService.requestEnrichment(lead.id)).rejects.toThrow(
       BadRequestException,
     );
+  });
+
+  it('should reject the second of two concurrent enrichment requests with ConflictException', async () => {
+    if (!dbAvailable) return;
+
+    const lead = await prisma.lead.create({ data: uniqueLead() });
+    mockQueueService.publish.mockClear();
+
+    const results = await Promise.allSettled([
+      enrichmentService.requestEnrichment(lead.id),
+      enrichmentService.requestEnrichment(lead.id),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    const reason = (rejected[0] as PromiseRejectedResult).reason as Error;
+    // Loser of the race gets ConflictException (atomic-update miss) or
+    // BadRequestException (pre-flight canEnrich check if the first request
+    // already transitioned the row to ENRICHING).
+    expect(
+      reason instanceof ConflictException ||
+        reason instanceof BadRequestException,
+    ).toBe(true);
+
+    const reloaded = await prisma.lead.findUnique({ where: { id: lead.id } });
+    expect(reloaded?.status).toBe('ENRICHING');
   });
 
   it('should allow re-enrichment for ENRICHED leads', async () => {

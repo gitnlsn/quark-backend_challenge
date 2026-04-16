@@ -4,10 +4,14 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { LeadStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { QueueService } from '../queue/queue.service.js';
 import { ENRICHMENT_QUEUE } from '../queue/queue.constants.js';
-import { canEnrich } from '../common/utils/state-machine.util.js';
+import {
+  canEnrich,
+  transitionStatus,
+} from '../common/utils/state-machine.util.js';
 
 @Injectable()
 export class EnrichmentService {
@@ -30,10 +34,7 @@ export class EnrichmentService {
 
     const requestedAt = new Date().toISOString();
 
-    await this.prisma.lead.update({
-      where: { id: leadId },
-      data: { status: 'ENRICHING' },
-    });
+    await transitionStatus(this.prisma, leadId, LeadStatus.ENRICHING);
 
     await this.queue.publish(ENRICHMENT_QUEUE, { leadId, requestedAt });
     this.logger.log(`Enrichment requested for lead ${leadId}`);

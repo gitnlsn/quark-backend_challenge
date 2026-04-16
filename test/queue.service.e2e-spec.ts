@@ -6,6 +6,8 @@ import { QueueService } from '../src/queue/queue.service.js';
 import {
   ENRICHMENT_QUEUE,
   CLASSIFICATION_QUEUE,
+  ENRICHMENT_DLQ,
+  CLASSIFICATION_DLQ,
 } from '../src/queue/queue.constants.js';
 
 const RABBITMQ_URL =
@@ -29,6 +31,26 @@ describe('QueueService Integration (RabbitMQ)', () => {
       return;
     }
 
+    // Delete any pre-existing queues so QueueService can re-assert them with
+    // the current arguments (DLX bindings may have changed across versions).
+    for (const queue of [
+      ENRICHMENT_QUEUE,
+      CLASSIFICATION_QUEUE,
+      ENRICHMENT_DLQ,
+      CLASSIFICATION_DLQ,
+    ]) {
+      try {
+        await rawCh.deleteQueue(queue);
+      } catch {
+        // Channel may have errored; reopen
+        try {
+          rawCh = await rawConn.createChannel();
+        } catch {
+          // ignore
+        }
+      }
+    }
+
     const moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot()],
       providers: [QueueService],
@@ -43,6 +65,8 @@ describe('QueueService Integration (RabbitMQ)', () => {
     if (!rabbitAvailable) return;
     await rawCh.purgeQueue(ENRICHMENT_QUEUE);
     await rawCh.purgeQueue(CLASSIFICATION_QUEUE);
+    await rawCh.purgeQueue(ENRICHMENT_DLQ);
+    await rawCh.purgeQueue(CLASSIFICATION_DLQ);
   });
 
   afterAll(async () => {
@@ -188,5 +212,33 @@ describe('QueueService Integration (RabbitMQ)', () => {
     });
 
     expect(received).toEqual(['fifo-1', 'fifo-2', 'fifo-3']);
+  });
+
+  it('should route NACKed messages to the enrichment DLQ', async () => {
+    if (!rabbitAvailable) return;
+
+    const payload = {
+      leadId: 'test-dlq',
+      requestedAt: new Date().toISOString(),
+    };
+    await queueService.publish(ENRICHMENT_QUEUE, payload);
+
+    // Consume once and NACK without requeue — should land in the DLQ
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Timed out waiting for main queue message')),
+        10000,
+      );
+      void rawCh.consume(ENRICHMENT_QUEUE, (msg) => {
+        if (!msg) return;
+        clearTimeout(timer);
+        rawCh.nack(msg, false, false);
+        void rawCh.cancel(msg.fields.consumerTag).then(() => resolve());
+      });
+    });
+
+    const dlqMsg = await consumeOneMessage(ENRICHMENT_DLQ);
+    const body = JSON.parse(dlqMsg.content.toString()) as { leadId: string };
+    expect(body.leadId).toBe('test-dlq');
   });
 });

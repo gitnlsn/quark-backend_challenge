@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { QueueService } from '../queue/queue.service.js';
 import { MockApiClientService } from '../mock-api-client/mock-api-client.service.js';
 import { ENRICHMENT_QUEUE } from '../queue/queue.constants.js';
+import { transitionStatus } from '../common/utils/state-machine.util.js';
 
 @Injectable()
 export class EnrichmentWorker implements OnModuleInit {
@@ -21,22 +22,23 @@ export class EnrichmentWorker implements OnModuleInit {
     await channel.consume(ENRICHMENT_QUEUE, (msg) => {
       if (!msg) return;
 
-      const { leadId, requestedAt } = JSON.parse(msg.content.toString()) as {
-        leadId: string;
-        requestedAt: string;
-      };
-      this.logger.log(`Processing enrichment for lead ${leadId}`);
-
       void (async () => {
         try {
+          const { leadId, requestedAt } = JSON.parse(
+            msg.content.toString(),
+          ) as {
+            leadId: string;
+            requestedAt: string;
+          };
+          this.logger.log(`Processing enrichment for lead ${leadId}`);
           await this.processEnrichment(leadId, requestedAt);
           channel.ack(msg);
         } catch (error) {
           this.logger.error(
-            `Failed to process enrichment for lead ${leadId}`,
+            'Unrecoverable error processing enrichment message; routing to DLQ',
             error instanceof Error ? error.stack : error,
           );
-          channel.ack(msg);
+          channel.nack(msg, false, false);
         }
       })();
     });
@@ -54,8 +56,8 @@ export class EnrichmentWorker implements OnModuleInit {
     try {
       const data = await this.mockApi.fetchCompanyData(lead.companyCnpj);
 
-      await this.prisma.$transaction([
-        this.prisma.enrichment.create({
+      await this.prisma.$transaction(async (tx) => {
+        await tx.enrichment.create({
           data: {
             leadId,
             companyName: data.companyName,
@@ -75,20 +77,17 @@ export class EnrichmentWorker implements OnModuleInit {
             completedAt: new Date(),
             status: ProcessingStatus.SUCCESS,
           },
-        }),
-        this.prisma.lead.update({
-          where: { id: leadId },
-          data: { status: LeadStatus.ENRICHED },
-        }),
-      ]);
+        });
+        await transitionStatus(tx, leadId, LeadStatus.ENRICHED);
+      });
 
       this.logger.log(`Enrichment completed for lead ${leadId}`);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
 
-      await this.prisma.$transaction([
-        this.prisma.enrichment.create({
+      await this.prisma.$transaction(async (tx) => {
+        await tx.enrichment.create({
           data: {
             leadId,
             requestedAt: new Date(requestedAt),
@@ -96,12 +95,9 @@ export class EnrichmentWorker implements OnModuleInit {
             status: ProcessingStatus.FAILED,
             errorMessage,
           },
-        }),
-        this.prisma.lead.update({
-          where: { id: leadId },
-          data: { status: LeadStatus.FAILED },
-        }),
-      ]);
+        });
+        await transitionStatus(tx, leadId, LeadStatus.FAILED);
+      });
 
       this.logger.error(
         `Enrichment failed for lead ${leadId}: ${errorMessage}`,
